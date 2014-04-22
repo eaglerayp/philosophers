@@ -52,7 +52,7 @@ public class Philosopher implements Runnable {
 		int mean_eat=0;
 		int num_philosophers=0;
 		int MAX_forks =100;
-
+		int philosopher_relation[][]= new int [MAX_forks][2];
 		
 		BufferedReader in;
 		try {
@@ -64,7 +64,7 @@ public class Philosopher implements Runnable {
 			mean_eat=Integer.parseInt(text.split(" ")[2]);
 			text = in.readLine();
 			num_philosophers=Integer.parseInt(text.split(" ")[2]);
-			int philosopher_relation[][]= new int [MAX_forks][2];
+			
 			int index=0;
 			text = in.readLine();
 			for(String pair:text.split("\\(")){
@@ -82,6 +82,12 @@ public class Philosopher implements Runnable {
 			e.printStackTrace();
 		}//end input
 		
+		//for socket > thread port
+		int port[]=new int [num_philosophers];
+		for(int i=0;i<num_philosophers;i++){
+			Random ran = new Random();
+			port[i]=ran.nextInt(16384)+49152;
+		}
 
 		  
 	    List<Philosopher> Philosophers = new ArrayList<Philosopher>();  
@@ -94,7 +100,7 @@ public class Philosopher implements Runnable {
 	    // start 5 workers  
 	    for (int i=0; i<5; i++)  
 	    {  
-	    //	Philosophers.add(new Philosopher());   
+	    	//Philosophers.add(new Philosopher());   
 	    }  
 	      
 	    // We must force the main thread to wait for all the workers  
