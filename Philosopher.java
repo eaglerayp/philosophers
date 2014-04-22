@@ -13,6 +13,8 @@ public class Philosopher implements Runnable {
 	  private static int MESSAGE_LENGTH=100;
 	  private static final byte REQUEST_CODE = 'R';
 	  private static final byte GRANT_CODE = 'G';
+	  private static final byte [] REQUEST_MESSAGE = { REQUEST_CODE };
+	  private static final byte [] GRANT_MESSAGE = { GRANT_CODE };
 	  private boolean [] waitingForfork;
 	  private boolean [] hasfork;
 	  private boolean [] neighborHasRequestedfork;
@@ -25,6 +27,7 @@ public class Philosopher implements Runnable {
 	  
 	  private Socket listensock;
 	  HashMap<Integer,Socket> socketlist = new HashMap<Integer,Socket>();
+	  ArrayList<Socket> socketlistenlist = new ArrayList<Socket>();
 	  public enum State{
 	        HUNGRY,
 	        EATING,
@@ -54,6 +57,10 @@ public class Philosopher implements Runnable {
 	  }
 	  
 	  private void eat() throws InterruptedException {
+		  for (int port:portlist){
+			  sendToNeighbor(port,REQUEST_MESSAGE);
+			  System.out.println("sendtoport"+port);
+		  }
 	        System.out
 	                .println(String.format("Philosopher %s is eating", Name));
 	        System.out.flush();
@@ -62,78 +69,29 @@ public class Philosopher implements Runnable {
 	        think();
 	  }
 	  
+	    /** Send a message to a neighbor
+	     *
+	     *  @param side the side of send to
+	     *  @param message the message to send
+	     *  @exception IOException if an exception was thrown during communication
+	     */
+	    private void sendToNeighbor(int port, byte [] message)
+	    {
+	        try
+	        {
+	        	socketlist.get(port).getOutputStream().write(message);
+	        }
+	        catch(IOException e)
+	        {
+	            System.err.println("Error sending " + (char) message[0] + " to " +
+	                               port + " " + e);
+	            System.exit(1);
+	        }
 
-      
-      /** Method executed by a thread that listens for incoming messages
-      *
-      *  @param side the side on which to listen - one of LEFT, RIGHT
-      */
-     private void listenForMessages(int port)
-     {
-         while(true)
-         {
-             byte [] messageReceived = receiveMessage(port);
-             /*switch(messageReceived[0])
-             {
-                 case REQUEST_CODE:
 
-                     if (hasChopstick[side])
-                         neighborHasRequestedChopstick[side] = true;
-                     else if (side == RIGHT && waitingForChopstick[side])
-                         neighborHasRequestedChopstick[side] = true;
-                     else
-                         sendToNeighbor(side, GRANT_MESSAGE);
-                     break;
+	    }
 
-                 case GRANT_CODE:
 
-                     synchronized(this)
-                     {
-                         waitingForChopstick[side] = false;
-                         hasChopstick[side] = true;
-                         notifyAll();
-                     }
-                     break;
-             }*/
-         }
-     }
-
-      /** Receive a message from a neighbor.  This method blocks until a
-       *  message is received
-       *
-       *  @param side the side to receive from
-       *  @return the message received from this neighbor
-       */
-      private byte [] receiveMessage(int port)
-      {
-          // Cannot start listening until we have a connection to neighbor
-          while(socketlist == null)
-          {
-              synchronized(this)
-              {
-                  try
-                  {
-                      wait();
-                  }
-                  catch(InterruptedException e)
-                  { }
-              }
-          }
-
-          byte [] buffer = new byte[MESSAGE_LENGTH];
-          try
-          {
-              socketlist.get(port).getInputStream().
-                      read(buffer);
-          }
-          catch(IOException e)
-          {
-              System.err.println("Error reading message from thread:" +
-            		  Name + " " + e);
-              System.exit(1);
-          }
-          return buffer;
-      }
 	  public Philosopher (int id,ArrayList<Integer> idlist1,final int selfport,ArrayList<Integer> portlist1,int mean_think,int mean_eat) throws IOException, InterruptedException  
 	  {  
 		state = State.THINKING;
@@ -184,25 +142,107 @@ public class Philosopher implements Runnable {
 	            System.exit(1);
 	        }
 	        while (true){  //listen
-	            Socket connectionSocket = null;
+	             Socket connectionSocket = null;
 	            try{
 	                connectionSocket = serverSocket.accept();
+	                final Socket listen=connectionSocket;
+			        new Thread() {
+			            public void run()
+			            {
+			            	listenForMessages(listen);
+			            }
+			        }.start();
 	            }
 	            catch(IOException e){
 	                System.err.println("Error accepting connection on  thread:" + 
 	                		Thread.currentThread().getId() + " " + e);
 	                System.exit(1);
 	            }
-	            //System.out.println("Port"+port);
-	            System.out.println("Listenport"+serverSocket.getLocalPort());
-	            System.out.println("comingsockIP"+connectionSocket.getRemoteSocketAddress());
-	            System.out.println("comingsockPORT"+connectionSocket.getPort());
+	            //System.out.println("Name"+Name);
+	            //System.out.println("Listenport"+serverSocket.getLocalPort());
+	            //System.out.println("comingsockIP"+connectionSocket.getRemoteSocketAddress());
+	            //System.out.println("comingsockPORT"+connectionSocket.getPort());
 	            synchronized(this){
-	                socketlist.put(connectionSocket.getLocalPort(),connectionSocket); 
+	                socketlistenlist.add(connectionSocket); 
 	                notifyAll();
-	            }
-	            
+	            }            
+
 	        }  
+      }
+      /** Method executed by a thread that listens for incoming messages
+      *
+      *  @param side the side on which to listen - one of LEFT, RIGHT
+      */
+     private void listenForMessages(Socket listensock)
+     {
+         while(true)
+         {
+             byte [] messageReceived = receiveMessage(listensock);
+             String file_string = "";
+
+             for(int i = 0; i < messageReceived.length; i++)
+             {
+                 file_string += (char)messageReceived[i];
+             }
+             System.out.println(file_string);
+             /*switch(messageReceived[0])
+             {
+                 case REQUEST_CODE:
+
+                     if (hasfork[side])
+                         neighborHasRequestedfork[side] = true;
+                     else if (side == RIGHT && waitingForfork[side])
+                         neighborHasRequestedfork[side] = true;
+                     else
+                         sendToNeighbor(side, GRANT_MESSAGE);
+                     break;
+
+                 case GRANT_CODE:
+
+                     synchronized(this)
+                     {
+                         waitingForfork[side] = false;
+                         hasfork[side] = true;
+                         notifyAll();
+                     }
+                     break;
+             }*/
+         }
+     }
+      /** Receive a message from a neighbor.  This method blocks until a
+       *  message is received
+       *
+       *  @param side the side to receive from
+       *  @return the message received from this neighbor
+       */
+      private byte [] receiveMessage(Socket listensock)
+      {
+          // Cannot start listening until we have a connection to neighbor
+          while(socketlist == null)
+          {
+              synchronized(this)
+              {
+                  try
+                  {
+                      wait();
+                  }
+                  catch(InterruptedException e)
+                  { }
+              }
+          }
+
+          byte [] buffer = new byte[MESSAGE_LENGTH];
+          try
+          {
+        	  listensock.getInputStream().read(buffer);
+          }
+          catch(IOException e)
+          {
+              System.err.println("Error reading message from thread:" +
+            		  Name + " " + e);
+              System.exit(1);
+          }
+          return buffer;
       }
       
 	  public static void main (String[] args) throws InterruptedException, IOException  
@@ -246,8 +286,8 @@ public class Philosopher implements Runnable {
 		for(int i=0;i<num_philosophers;i++){
 			Random ran = new Random();
 			port[i]=ran.nextInt(16384)+49152;
+			//System.out.println(port[i]);
 		}
-
 		  
 		
 		
@@ -275,6 +315,7 @@ public class Philosopher implements Runnable {
 	    	}
 	    	Philosophers.add(new Philosopher(i,idlist,port[i-1],portlist,mean_think,mean_eat));   
 	    	portlist.clear();
+	    	idlist.clear();
 	    }  
 	      
 	    // We must force the main thread to wait for all the workers  
@@ -301,8 +342,8 @@ public class Philosopher implements Runnable {
 	    this.running = true;  
 	    System.out.println("This is currently running on a separate thread, " +  
 	        "the id is: " + Thread.currentThread().getId());  
-	    //System.out.println(Name);
-	    /*for(int port:portlist){
+
+	    for(int port:portlist){
 	        //System.out.println(port);
 			Socket sock= new Socket();
 			try {
@@ -313,8 +354,9 @@ public class Philosopher implements Runnable {
 			}
 			socketlist.put(port,sock);
 			//System.out.println("connect");
-		}	*/ 
-	    
+		}	
+
+
 	    try   
 	    {  
 	      // this will pause this spawned thread for 5 seconds  
@@ -322,6 +364,15 @@ public class Philosopher implements Runnable {
 	      // Also, the Thread.sleep() method throws an InterruptedException  
 	      //  so we must "handle" this possible exception, that's why I've  
 	      //  wrapped the sleep() method with a try/catch block  
+		  /*for(final Socket listen:socketlistenlist){
+		    	System.out.println("Name"+Name);
+		        new Thread() {
+		            public void run()
+		            {
+		            	listenForMessages(listen);
+		            }
+		        }.start();
+		  }*/
 	      think();  
 	      while(this.hungry){
 	    	  eat();
