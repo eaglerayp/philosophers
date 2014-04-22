@@ -9,6 +9,28 @@ import java.io.*;
 public class Philosopher implements Runnable {
 	  public boolean running = false;  
 	  volatile boolean hungry=false;  
+	  private String address ="localhost";
+	  private static int MESSAGE_LENGTH=100;
+	  private static final byte REQUEST_CODE = 'R';
+	  private static final byte GRANT_CODE = 'G';
+	  private boolean [] waitingForfork;
+	  private boolean [] hasfork;
+	  private boolean [] neighborHasRequestedfork;
+	  private int meanthink=0;
+	  private int meaneat=0;
+	  private int Name;
+	  private State state;
+	  ArrayList<Integer> idlist;
+	  ArrayList<Integer> portlist;
+	  
+	  private Socket listensock;
+	  HashMap<Integer,Socket> socketlist = new HashMap<Integer,Socket>();
+	  public enum State{
+	        HUNGRY,
+	        EATING,
+	        THINKING;
+	  }
+	  
 	  private static int getPoissonRandom(double mean) { // for model time period with poisson distribution 
 		    Random r = new Random();
 		    double L = Math.exp(-mean);
@@ -23,27 +45,166 @@ public class Philosopher implements Runnable {
 	  
 	  private void think() throws InterruptedException {
 	        System.out
-	                .println(String.format("Philosopher %s is thinking", Thread.currentThread().getId()));
+	                .println(String.format("Philosopher %s is thinking", Name));
 	        System.out.flush();
-	        Thread.sleep(getPoissonRandom(5000));
+	        Thread.sleep(getPoissonRandom(meanthink));
 	        hungry=true;
 	        System.out
-            .println(String.format("Philosopher %s is hungry", Thread.currentThread().getId()));
+            .println(String.format("Philosopher %s is hungry", Name));
 	  }
+	  
 	  private void eat() throws InterruptedException {
 	        System.out
-	                .println(String.format("Philosopher %s is eating", Thread.currentThread().getId()));
+	                .println(String.format("Philosopher %s is eating", Name));
 	        System.out.flush();
-	        Thread.sleep(getPoissonRandom(7000));
+	        Thread.sleep(getPoissonRandom(meaneat));
+	        hungry=false;
+	        think();
 	  }
 	  
-	  
-	  public Philosopher (int selfport,ArrayList<Integer> portlist,int mean_think,int mean_eat)  
+
+      
+      /** Method executed by a thread that listens for incoming messages
+      *
+      *  @param side the side on which to listen - one of LEFT, RIGHT
+      */
+     private void listenForMessages(int port)
+     {
+         while(true)
+         {
+             byte [] messageReceived = receiveMessage(port);
+             /*switch(messageReceived[0])
+             {
+                 case REQUEST_CODE:
+
+                     if (hasChopstick[side])
+                         neighborHasRequestedChopstick[side] = true;
+                     else if (side == RIGHT && waitingForChopstick[side])
+                         neighborHasRequestedChopstick[side] = true;
+                     else
+                         sendToNeighbor(side, GRANT_MESSAGE);
+                     break;
+
+                 case GRANT_CODE:
+
+                     synchronized(this)
+                     {
+                         waitingForChopstick[side] = false;
+                         hasChopstick[side] = true;
+                         notifyAll();
+                     }
+                     break;
+             }*/
+         }
+     }
+
+      /** Receive a message from a neighbor.  This method blocks until a
+       *  message is received
+       *
+       *  @param side the side to receive from
+       *  @return the message received from this neighbor
+       */
+      private byte [] receiveMessage(int port)
+      {
+          // Cannot start listening until we have a connection to neighbor
+          while(socketlist == null)
+          {
+              synchronized(this)
+              {
+                  try
+                  {
+                      wait();
+                  }
+                  catch(InterruptedException e)
+                  { }
+              }
+          }
+
+          byte [] buffer = new byte[MESSAGE_LENGTH];
+          try
+          {
+              socketlist.get(port).getInputStream().
+                      read(buffer);
+          }
+          catch(IOException e)
+          {
+              System.err.println("Error reading message from thread:" +
+            		  Name + " " + e);
+              System.exit(1);
+          }
+          return buffer;
+      }
+	  public Philosopher (int id,ArrayList<Integer> idlist1,final int selfport,ArrayList<Integer> portlist1,int mean_think,int mean_eat) throws IOException, InterruptedException  
 	  {  
-	    Thread thread = new Thread(this);  
-	    thread.start();  
+		state = State.THINKING;
+		Name=id;
+		meanthink=mean_think;
+		meaneat=mean_eat;
+        /*waitingForfork=new boolean [portlist1.size()];
+        neighborHasRequestedfork=new boolean [portlist1.size()];
+        hasfork=new boolean [portlist1.size()];*/
+        idlist = new ArrayList <Integer>(idlist1);
+        portlist = new ArrayList <Integer>(portlist1);
+        
+        new Thread(this) {
+            public void run()
+            {
+                listenForConnectionRequest(selfport);
+            }
+        }.start();
+
+       /* synchronized(this){  wait all thread  listen  and then connect
+        	wait();
+	        for(int port:portlist1){
+				Socket sock= new Socket();
+				try {
+					sock.connect(new InetSocketAddress(address,port));
+					socketlist.put(port,sock);
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+	
+	        }
+        }*/
+		Thread thread = new Thread(this);
+	    thread.start(); 
 	  }  
-	    
+	  
+      private void listenForConnectionRequest(int port)
+      {
+    	    ServerSocket serverSocket = null;
+	        try{
+	            serverSocket = new ServerSocket(port);
+	        }
+	        catch(IOException e){
+	        	System.err.println("THREAD"+Thread.currentThread().getId());
+	            System.err.println("Error creating server socket on name:" + 
+	            		Name +"port"+port+ " " + e);
+	            System.exit(1);
+	        }
+	        while (true){  //listen
+	            Socket connectionSocket = null;
+	            try{
+	                connectionSocket = serverSocket.accept();
+	            }
+	            catch(IOException e){
+	                System.err.println("Error accepting connection on  thread:" + 
+	                		Thread.currentThread().getId() + " " + e);
+	                System.exit(1);
+	            }
+	            //System.out.println("Port"+port);
+	            System.out.println("Listenport"+serverSocket.getLocalPort());
+	            System.out.println("comingsockIP"+connectionSocket.getRemoteSocketAddress());
+	            System.out.println("comingsockPORT"+connectionSocket.getPort());
+	            synchronized(this){
+	                socketlist.put(connectionSocket.getLocalPort(),connectionSocket); 
+	                notifyAll();
+	            }
+	            
+	        }  
+      }
+      
 	  public static void main (String[] args) throws InterruptedException, IOException  
 	  {  
 		//process input
@@ -97,23 +258,22 @@ public class Philosopher implements Runnable {
 	  
 	    Date start = new Date();  
 	  
-	    // start 6 philosopher   (portlist send every connection port)  
+	    // start 6 philosopher   (portlist send every connection port) 
+	    ArrayList<Integer> idlist = new ArrayList<Integer>();
 	    ArrayList<Integer> portlist = new ArrayList<Integer>();
 	    for (int i=1; i<=6; i++)  
 	    {  
 	    	for (int j=0;j<index;j++){
 	    		if(philosopher_relation[j][0]==i){
-	    			portlist.add(port[philosopher_relation[j][1]]);
+	    			idlist.add(philosopher_relation[j][1]);
+	    			portlist.add(port[philosopher_relation[j][1]-1]);
 	    		}
 	    		else if(philosopher_relation[j][1]==i){
-	    			portlist.add(port[philosopher_relation[j][0]]);
+	    			idlist.add(philosopher_relation[j][0]);
+	    			portlist.add(port[philosopher_relation[j][0]-1]);
 	    		}
 	    	}
-	    	System.out.println("USER:"+i);
-	    	for(int a:portlist){
-	    		System.out.println(a);
-	    	}
-	    	Philosophers.add(new Philosopher(port[i-1],portlist,mean_think,mean_eat));   
+	    	Philosophers.add(new Philosopher(i,idlist,port[i-1],portlist,mean_think,mean_eat));   
 	    	portlist.clear();
 	    }  
 	      
@@ -141,7 +301,20 @@ public class Philosopher implements Runnable {
 	    this.running = true;  
 	    System.out.println("This is currently running on a separate thread, " +  
 	        "the id is: " + Thread.currentThread().getId());  
-	      
+	    //System.out.println(Name);
+	    /*for(int port:portlist){
+	        //System.out.println(port);
+			Socket sock= new Socket();
+			try {
+				sock.connect(new InetSocketAddress(address,port));
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+			socketlist.put(port,sock);
+			//System.out.println("connect");
+		}	*/ 
+	    
 	    try   
 	    {  
 	      // this will pause this spawned thread for 5 seconds  
