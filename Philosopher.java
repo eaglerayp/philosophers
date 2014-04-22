@@ -38,8 +38,7 @@ public class Philosopher implements Runnable {
 	  }
 	  
 	  
-	  public Philosopher (InetAddress Neighbor1,
-              InetAddress Neighbor2,InetAddress Neighbor3,int mean_think,int mean_eat)  
+	  public Philosopher (int selfport,ArrayList<Integer> portlist,int mean_think,int mean_eat)  
 	  {  
 	    Thread thread = new Thread(this);  
 	    thread.start();  
@@ -53,7 +52,7 @@ public class Philosopher implements Runnable {
 		int num_philosophers=0;
 		int MAX_forks =100;
 		int philosopher_relation[][]= new int [MAX_forks][2];
-		
+		int index=0;
 		BufferedReader in;
 		try {
 			in = new BufferedReader(new FileReader("DP_config.txt"));
@@ -65,10 +64,9 @@ public class Philosopher implements Runnable {
 			text = in.readLine();
 			num_philosophers=Integer.parseInt(text.split(" ")[2]);
 			
-			int index=0;
+			
 			text = in.readLine();
 			for(String pair:text.split("\\(")){
-				System.out.println(pair);
 				if(pair.split(",").length>1&&index<MAX_forks&&!pair.split(",")[0].equals("i")){
 					philosopher_relation[index][0]=Integer.parseInt(pair.split(",")[0]);
 					philosopher_relation[index][1]=Integer.parseInt(pair.split(",")[1].split("\\)")[0]);
@@ -90,6 +88,8 @@ public class Philosopher implements Runnable {
 		}
 
 		  
+		
+		
 	    List<Philosopher> Philosophers = new ArrayList<Philosopher>();  
 	      
 	    System.out.println("This is currently running on the main thread, " +  
@@ -97,10 +97,24 @@ public class Philosopher implements Runnable {
 	  
 	    Date start = new Date();  
 	  
-	    // start 5 workers  
-	    for (int i=0; i<5; i++)  
+	    // start 6 philosopher   (portlist send every connection port)  
+	    ArrayList<Integer> portlist = new ArrayList<Integer>();
+	    for (int i=1; i<=6; i++)  
 	    {  
-	    	//Philosophers.add(new Philosopher());   
+	    	for (int j=0;j<index;j++){
+	    		if(philosopher_relation[j][0]==i){
+	    			portlist.add(port[philosopher_relation[j][1]]);
+	    		}
+	    		else if(philosopher_relation[j][1]==i){
+	    			portlist.add(port[philosopher_relation[j][0]]);
+	    		}
+	    	}
+	    	System.out.println("USER:"+i);
+	    	for(int a:portlist){
+	    		System.out.println(a);
+	    	}
+	    	Philosophers.add(new Philosopher(port[i-1],portlist,mean_think,mean_eat));   
+	    	portlist.clear();
 	    }  
 	      
 	    // We must force the main thread to wait for all the workers  
